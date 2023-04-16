@@ -1,7 +1,6 @@
 #ifndef HELPER_FUNCS_H
 #define HELPER_FUNCS_H
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
@@ -104,7 +103,6 @@ bool check_sorted_lo_hi(int* passed_list, int N) {
         }
         else {
             if (passed_list[N-1] < passed_list[N-2]) {
-                printf("found inversion at %d\n", N);
                 return false;
             }
             else {
