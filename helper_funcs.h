@@ -180,9 +180,5 @@ int pick_a_rand_pivot(int* passed_list, int N, int numvals) {
 }
 
 
-size_t size_of_array(int* passed_list) {
-	return sizeof(passed_list)/sizeof(passed_list[0]);
-}
-
 
 #endif
