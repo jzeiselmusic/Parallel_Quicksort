@@ -140,4 +140,49 @@ float num_inversions(int* passed_list, int N) {
     return invs_f/N_f;
 }
 
+
+int pick_a_pivot(int* passed_list, int N) {
+	// one possible way of finding a pivot value in a list of N numbers
+	// pivot value should be close to median
+	
+	// this algorithm is to take median of first, second, last, second to last, and middle value
+	int vals[5] = {passed_list[0],
+		       passed_list[1],
+		       passed_list[N-1],
+		       passed_list[N-2],
+		       passed_list[(int)floor(N/2)]};
+	// sort these numbers using bubblesort
+	bubble_sort(vals, 5);
+	
+	return vals[3];
+}
+
+int pick_a_rand_pivot(int* passed_list, int N, int numvals) {
+	// another way of picking a pivot
+	// find numvals random points in list of length N, then find the median of those
+	int pivot;
+	time_t t;
+	int pivot_list[numvals];
+	int i;
+	if (numvals < N) {
+		srand((unsigned) time(&t));		
+		for (i = 0; i < numvals; i++) {
+			pivot_list[i] = passed_list[(int)(rand() % N)];
+		}
+		quick_sort(pivot_list, 0, numvals-1);
+		pivot = pivot_list[(int)(numvals/2)];
+		return pivot;
+	}
+	else {
+		return -1;
+	}
+
+}
+
+
+size_t size_of_array(int* passed_list) {
+	return sizeof(passed_list)/sizeof(passed_list[0]);
+}
+
+
 #endif

@@ -1,0 +1,20 @@
+#!/bin/bash
+#PBS -l walltime=00:05:00
+#PBS -l nodes=8:ppn=1
+#PBS -N quicksort
+#PBS -q edu_shared
+#PBS -j oe
+##PBS jzeise2@uic.edu
+
+module load MPICH/3.3.2-GCC-9.3.0
+
+cd $PBS_O_WORKDIR
+
+mpicc MPI_QS.c -o ./build/mpi_qs -lm
+
+mpirun ./build/mpi_qs
+
+echo "Done"
+
+
+
