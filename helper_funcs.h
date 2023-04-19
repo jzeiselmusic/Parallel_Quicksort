@@ -5,6 +5,7 @@
 #include <time.h>
 #include <math.h>
 #include <stdbool.h>
+#include <limits.h>
 
 int* initialize_list(int N) {
     // return pointer to a list of random vals length N
@@ -14,7 +15,7 @@ int* initialize_list(int N) {
     num_list = malloc(N*sizeof(int));
     srand((unsigned) time(&t));
     for (i = 0; i < N; i++) {
-        num_list[i] = rand();
+        num_list[i] = rand() % N;
     }
     return num_list;
 }
@@ -112,6 +113,29 @@ bool check_sorted_lo_hi(int* passed_list, int N) {
     }
 }
 
+
+int isArraySorted(int s[], int n) {
+  // 1 is returned sorting ascending
+  // 2 is returned sorting descending
+  // 0 is not sorted
+  int a = 1, d = 1, i = 0;
+
+  while ((a == 1 || d == 1) && i < n - 1) {
+    if (s[i] < s[i+1])
+      d = 0;
+    else if (s[i] > s[i+1])
+      a = 0;
+    i++;
+  }
+
+  if (a == 1)
+    return 1;
+  else if (d == 1)
+    return 2;
+  else
+    return 0;
+}
+
 float num_inversions(int* passed_list, int N) {
     // return the number of inversions 
     // i.e. the value representing the amount of unsortedness
@@ -180,5 +204,55 @@ int pick_a_rand_pivot(int* passed_list, int N, int numvals) {
 }
 
 
+int* pick_top_k_values(int* passed_list, int N, int k) {
+	// remember to free this list when done!!!
+	int* return_list = calloc(k, sizeof(int));
+	int i;	
+	int j;
+	int temp;
+	int myval;
+	for (i = 0; i < N; i++) {
+		myval = passed_list[i];
+		for (j = k-1; j >= 0; j--) {
+			if (myval >= return_list[j]) {
+				temp = return_list[j];
+				return_list[j] = myval;
+				myval = temp;
+			}
+			else {
+				break;
+			}
+		} 
+	}
+	return return_list;
+}
+
+
+int* pick_bottom_k_values(int* passed_list, int N, int k) {
+	// does not work yet
+	// remember to free this list when done!!
+	int* return_list = calloc(k, sizeof(int));
+	int i;
+	int j;
+	int temp;
+	int myval;
+	for (i = 0; i < k; i++) {
+		return_list[i] = INT_MAX;
+	}
+	for (i = k; i < N; i++) {
+		myval = passed_list[i];
+		for (j = k-1; j >= 0; j--) {
+			if (myval <= return_list[j]) {
+				temp = return_list[j];
+				return_list[j] = myval;
+				myval = temp;
+			}
+			else {
+				break;
+			}
+		}
+	}
+	return return_list;
+}
 
 #endif
