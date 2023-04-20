@@ -38,8 +38,8 @@ int main(int argc, char** argv) {
 	
 	// logp rounds
 	for (k = 0; k < lprocs; k++) {
-		int idcheck = (int)(myid & (0xF8 >> k));
-		int idcheck_2 = (myid^((int)pow(2,lprocs - k - 1)));
+		int idcheck = myid & (0xF8 >> k);
+		int idcheck_2 = myid^((int)pow(2,lprocs - k - 1));
 		// senders are 0, then 0 and 1, then 0,1,2,3
 		if (idcheck == myid) {
 			// pick a pivot point for master array
