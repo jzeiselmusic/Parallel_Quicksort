@@ -6,7 +6,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <limits.h>
-
+#include <stdio.h>
 int* initialize_list(int N) {
     // return pointer to a list of random vals length N
     int i;
@@ -229,26 +229,32 @@ int* pick_top_k_values(int* passed_list, int N, int k) {
 
 
 int* pick_bottom_k_values(int* passed_list, int N, int k) {
-	// does not work yet
 	// remember to free this list when done!!
 	int* return_list = calloc(k, sizeof(int));
 	int i;
 	int j;
+	int kk;
 	int temp;
 	int myval;
 	for (i = 0; i < k; i++) {
 		return_list[i] = INT_MAX;
 	}
-	for (i = k; i < N; i++) {
+	for (i = 0; i < N; i++) {
 		myval = passed_list[i];
-		for (j = k-1; j >= 0; j--) {
-			if (myval <= return_list[j]) {
-				temp = return_list[j];
-				return_list[j] = myval;
-				myval = temp;
+		if (myval < return_list[0]) {
+			for (j = 0; j < k-1; j++) {
+				return_list[j] = return_list[j+1];
 			}
-			else {
-				break;
+			return_list[k-1] = myval;
+			for (j = k-2; j >= 0; j--) {
+				if (myval > return_list[j]) {
+					temp = return_list[j];
+					return_list[j] = myval;
+					return_list[j+1] = temp;
+				}
+				else {
+					break;
+				}
 			}
 		}
 	}

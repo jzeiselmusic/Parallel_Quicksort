@@ -4,7 +4,7 @@
 
 
 
-int main() {
+int main2() {
 	int* a = malloc(20*sizeof(int));
 	a[9] = 10;	
 	a[8] = 5;
@@ -21,8 +21,8 @@ int main() {
 }
 
 
-int main2() {
-	int mylist[15] = {10, 5, 1, 2, 11, 3, 15, 20, 19, 18, 100, 100, 100, 30, 41};
+int main() {
+	int mylist[15] = {1, 3, 2, 3, 11, 1, 15, 20, 19, 18, 100, 100, 100, 30, 41};
 	int* highest_values = pick_bottom_k_values(mylist, 15, 4);
 	int i;
 	for (i = 0; i < 4; i++) {

@@ -4,7 +4,7 @@
 #include "helper_funcs.h"
 
 int main(int argc, char** argv) {
-	int MAX_ARRAY_SIZE = 500;
+	int MAX_ARRAY_SIZE = 800;
 	int numprocs, myid;
 	int i, j; // used for loops
 	MPI_Init(&argc, &argv);
@@ -32,11 +32,16 @@ int main(int argc, char** argv) {
 	int actual_receive;
 	int array_lo_iter, array_hi_iter;
 	int lprocs = (int)log2(numprocs);
+
+	double t1, t2;
 	MPI_Status receive_handle;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	
 	// logp rounds
+	if (myid == 0) {
+		t1 = MPI_Wtime();
+	}
 	for (k = 0; k < lprocs; k++) {
 		int idcheck = myid & (0xF8 >> k);
 		int idcheck_2 = myid^((int)pow(2,lprocs - k - 1));
@@ -114,6 +119,9 @@ int main(int argc, char** argv) {
 	insertion_sort(master_array,array_size);
 	
 	MPI_Barrier(MPI_COMM_WORLD);
+	if (myid == 0) {
+		t2 = MPI_Wtime();
+	}
 	// now check if all processors are sorted
 	//
 	//
@@ -145,5 +153,9 @@ int main(int argc, char** argv) {
 	}
 	
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (myid == 0) {
+		printf("\n\ntotal time: %.4f\n", t2 - t1);
+	}
 	return 0;
 }
