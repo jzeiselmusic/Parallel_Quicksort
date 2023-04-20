@@ -83,21 +83,16 @@ int main(int argc, char** argv) {
 			free(array_hi);
 		}
 		else if ((idcheck_2 & (0xF8 >> k)) == idcheck_2) {
-			// create a temporary array to hold received data, max size is size of unsplit list
-			int* temp_array = malloc(array_size*sizeof(int));
-			// receive list
-			MPI_Recv(temp_array, array_size, MPI_INT,
-				myid^((int)pow(2, lprocs - k - 1)), k, MPI_COMM_WORLD,
-				&receive_handle);
-			// get the actual number of data elements received aka the sent list length
+			// probe to get length of incoming message
+			MPI_Probe(myid^((int)pow(2,lprocs - k - 1)), k, &receive_handle);
+			// use receive handle to get size of incoming message
 			MPI_Get_count(&receive_handle, MPI_INT, &actual_receive);
-			if (actual_receive < array_size) {
-				// truncate allocated temporary array to length of actual sent list length
-				temp_array = realloc(temp_array, (actual_receive)*sizeof(int)); 
-			}
-			else {
-				printf("UH OH\n");
-			}
+			// create a temp array to hold recvd data
+			int* temp_array = malloc(actual_receive*sizeof(int));
+			// receive list
+			MPI_Recv(temp_array, actual_receive, MPI_INT,
+				myid^((int)pow(2, lprocs - k - 1)), k, MPI_COMM_WORLD,
+				MPI_STATUS_IGNORE);
 			// we no longer need memory pointed to by master array
 			free(master_array);
 			// master array will now point to temporary array
