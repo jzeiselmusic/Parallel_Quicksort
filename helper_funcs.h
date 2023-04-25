@@ -7,6 +7,18 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <stdio.h>
+
+
+/* struct containing return value from *pick top or bottom k elements* */ 
+struct PackedArrays {
+	int* chosen_vals;	
+	int chosen_vals_size;
+	int* new_master_array;
+	int new_master_array_size;
+};
+
+
+
 int* initialize_list(int N) {
     // return pointer to a list of random vals length N
     int i;
@@ -204,33 +216,63 @@ int pick_a_rand_pivot(int* passed_list, int N, int numvals) {
 }
 
 
-int* pick_top_k_values(int* passed_list, int N, int k) {
+void pick_top_k_values(int* passed_list, int N, int k, struct PackedArrays* return_struct) {
+	// takes in malloc'd list, returns struct with 2 new malloc'd lists. 
 	// remember to free this list when done!!!
-	int* return_list = calloc(k, sizeof(int));
+	int* return_list = malloc(k*sizeof(int));
+	int* new_master_list = malloc(N*sizeof(int));
+	int master_iter = 0;	
+	int flag = 0;
 	int i;	
 	int j;
 	int temp;
 	int myval;
+	for (i = 0; i < k; i++) {
+		return_list[i] = -INT_MAX;
+	}
 	for (i = 0; i < N; i++) {
+		flag = 0;
 		myval = passed_list[i];
 		for (j = k-1; j >= 0; j--) {
 			if (myval >= return_list[j]) {
+				flag = 1;
 				temp = return_list[j];
 				return_list[j] = myval;
 				myval = temp;
+				if (j == 0) {
+					flag = 2;
+				}
 			}
-			else {
-				break;
+		}
+		// place myval back in the new master list if 
+		// 1. it didnt get popped into the return list
+		// 2. if it got replaced by another value in the return list
+		if ((flag == 0) || (flag == 2)) {
+			if (myval != -INT_MAX) {		
+				new_master_list[master_iter] = myval;
+				master_iter += 1;
 			}
 		} 
 	}
-	return return_list;
+	// resize master_list to actual size //
+	new_master_list = realloc(new_master_list, master_iter*sizeof(int));
+
+	return_struct->chosen_vals = return_list;
+	return_struct->chosen_vals_size = k;
+	return_struct->new_master_array = new_master_list;
+	return_struct->new_master_array_size = master_iter;
 }
 
 
-int* pick_bottom_k_values(int* passed_list, int N, int k) {
+void pick_bottom_k_values(int* passed_list, int N, int k, struct PackedArrays* return_struct) {
 	// remember to free this list when done!!
-	int* return_list = calloc(k, sizeof(int));
+	// returns struct with 2 mallocd lists
+	int* return_list = malloc(k*sizeof(int));
+	int* new_master_list = malloc(N*sizeof(int));
+	int flag = 0;
+	int master_iter = 0;
+	int pushed_val;
+
 	int i;
 	int j;
 	int kk;
@@ -240,8 +282,14 @@ int* pick_bottom_k_values(int* passed_list, int N, int k) {
 		return_list[i] = INT_MAX;
 	}
 	for (i = 0; i < N; i++) {
+		flag = 0;
 		myval = passed_list[i];
 		if (myval < return_list[0]) {
+			flag = 2;
+			if (return_list[0] != INT_MAX) {
+				flag = 1;
+				pushed_val = return_list[0];
+			}
 			for (j = 0; j < k-1; j++) {
 				return_list[j] = return_list[j+1];
 			}
@@ -257,8 +305,21 @@ int* pick_bottom_k_values(int* passed_list, int N, int k) {
 				}
 			}
 		}
+		if (flag == 1) {
+			new_master_list[master_iter] = pushed_val;
+			master_iter += 1;
+		}
+		else if (flag == 0) {
+			new_master_list[master_iter] = myval;
+			master_iter += 1;
+		}
 	}
-	return return_list;
+	new_master_list = realloc(new_master_list, master_iter*sizeof(int));
+
+	return_struct->chosen_vals = return_list;
+	return_struct->chosen_vals_size = k;
+	return_struct->new_master_array = new_master_list;
+	return_struct->new_master_array_size = master_iter;	
 }
 
 #endif

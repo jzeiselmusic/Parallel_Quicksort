@@ -22,12 +22,25 @@ int main2() {
 
 
 int main() {
-	int mylist[15] = {1, 3, 2, 3, 11, 1, 15, 20, 19, 18, 100, 100, 100, 30, 41};
-	int* highest_values = pick_bottom_k_values(mylist, 15, 4);
+	int mylist[15] = {1, 5, 2, 2, 11, 50, 15, 3, 19, 18, 100, 100, 100, 30, 41};
+	struct PackedArrays p;
+	pick_bottom_k_values(mylist, 15, 4, &p);
 	int i;
-	for (i = 0; i < 4; i++) {
-		printf("%d\n", highest_values[i]);
+	printf("starting list: \n");
+	for (i = 0; i < 15; i++) {
+		printf("%d ", mylist[i]);
 	}
+	printf("\n");
+	printf("returnted list: \n");
+	for (i = 0; i < p.chosen_vals_size; i++) {
+		printf("%d ", (p.chosen_vals)[i]);
+	}
+	printf("\n");
+	printf("the old list: \n");
+	for (i = 0; i < p.new_master_array_size; i++) {
+		printf("%d ", (p.new_master_array)[i]);
+	}
+	printf("\n");
 	return 0;
 }
 
