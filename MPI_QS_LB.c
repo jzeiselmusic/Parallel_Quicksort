@@ -161,17 +161,17 @@ barrier;
 		}
 		if (myid > (myid^bit_flipper)) {
 			// send first then receive
-			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 0, MPI_COMM_WORLD);
-			MPI_Recv(&ne_load, 1, MPI_INT, myid^bit_flipper, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 1, MPI_COMM_WORLD);
-			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 100, MPI_COMM_WORLD);
+			MPI_Recv(&ne_load, 1, MPI_INT, myid^bit_flipper, 101, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 102, MPI_COMM_WORLD);
+			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 103, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		} 
 		else {
 			// receive first then send
-			MPI_Recv(&ne_load, 1, MPI_INT, myid^bit_flipper, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 0, MPI_COMM_WORLD);
-			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 1, MPI_COMM_WORLD);
+			MPI_Recv(&ne_load, 1, MPI_INT, myid^bit_flipper, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 101, MPI_COMM_WORLD);
+			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 102, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 103, MPI_COMM_WORLD);
 		}
 		if (my_load >= 1.2*ne_load) {
 			send_role = 1; // role is sender
