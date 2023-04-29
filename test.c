@@ -22,11 +22,9 @@ int main2() {
 
 
 int main() {
-	int test = 0xFFFF;
-	int flipper = test ^ (8 - 1);
 	int mylist[15] = {1, 5, 2, 2, 11, 50, 15, 3, 19, 18, 100, 100, 100, 30, 41};
 	struct PackedArrays p;
-	pick_top_k_values(mylist, 15, 4, &p);
+	pick_k_values(mylist, 15, 4, &p);
 	int i;
 	printf("starting list: \n");
 	for (i = 0; i < 15; i++) {

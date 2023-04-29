@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <stdio.h>
+#include <string.h>
 
 
 /* struct containing return value from *pick top or bottom k elements* */ 
@@ -213,6 +214,26 @@ int pick_a_rand_pivot(int* passed_list, int N, int numvals) {
 		return -1;
 	}
 
+}
+
+void pick_k_values(int* passed_list, int N, int k, struct PackedArrays* return_struct) {
+	// takes in malloc'd list, returns struct with 2 new malloc'd lists.
+	//
+	// instead of picking top or bottom k values, we just pick out the last k values from *PL 
+	int* return_list = malloc(k*sizeof(int));
+	int* new_master_list = malloc((N-k)*sizeof(int));
+	int i;
+
+	for (i = k; i > 0; i--) {
+		return_list[k - i] = passed_list[N - i];
+
+	}
+
+	memcpy(new_master_list, passed_list, (N-k)*sizeof(int));
+	return_struct->chosen_vals = return_list;
+	return_struct->chosen_vals_size = k;
+	return_struct->new_master_array = new_master_list;
+	return_struct->new_master_array_size = N-k;
 }
 
 

@@ -4,10 +4,10 @@
 #include "helper_funcs.h"
 
 #define barrier	  MPI_Barrier(MPI_COMM_WORLD)
-#define rounds    4
+#define rounds    2
 
 int main(int argc, char** argv) {
-	int MAX_ARRAY_SIZE = 80000;
+	int MAX_ARRAY_SIZE = 2000;
 	int numprocs, myid;
 	int i, j; // used for loops
 	MPI_Init(&argc, &argv);
@@ -104,11 +104,10 @@ int main(int argc, char** argv) {
 			// master array size is received data size
 			array_size = actual_receive;
 		}
-/**************/
-barrier;
-/**************/
+	/**************/
+	barrier;
+	/**************/
 	}
-
 
 /*************/
 
@@ -131,7 +130,7 @@ barrier;
 	int send_role;
 
 	// struct to help with picking top/bottom values and changing master array
-	struct PackedArrays top_bottom_vals_return;
+	struct PackedArrays vals_return;
 
 	// need to store a list [] of pointers that hold first mem location of neighboring data lists
 	int* neighbor_lists[lprocs*rounds];
@@ -159,19 +158,21 @@ barrier;
 		for (iter = 0; iter < (lprocs*rounds); iter++) {
 			my_load += neighbor_list_sizes[iter];
 		}
+		printf("myid: %d  round: %d   myload:  %d   myactual:  %d\n",
+					myid, i, my_load, my_actual_load);
 		if (myid > (myid^bit_flipper)) {
 			// send first then receive
-			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 0, MPI_COMM_WORLD);
-			MPI_Recv(&ne_load, 1, MPI_INT, myid^bit_flipper, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 1, MPI_COMM_WORLD);
-			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 100, MPI_COMM_WORLD);
+			MPI_Recv(&ne_load, 1, MPI_INT, myid^bit_flipper, 101, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 102, MPI_COMM_WORLD);
+			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 103, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		} 
 		else {
 			// receive first then send
-			MPI_Recv(&ne_load, 1, MPI_INT, myid^bit_flipper, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 0, MPI_COMM_WORLD);
-			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 1, MPI_COMM_WORLD);
+			MPI_Recv(&ne_load, 1, MPI_INT, myid^bit_flipper, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 101, MPI_COMM_WORLD);
+			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 102, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 103, MPI_COMM_WORLD);
 		}
 		if (my_load >= 1.2*ne_load) {
 			send_role = 1; // role is sender
@@ -185,33 +186,26 @@ barrier;
 
 		int num_to_send_recv = floor(abs(my_load - ne_load)/4.0);
 
-		if (num_to_send_recv > 100) {
+		if (num_to_send_recv > 0) {
 			
 			if (send_role == 1) {
 				// if sending node, find diff between my load and ne load
 				if (my_actual_load > num_to_send_recv) {
 					// declare an array for holding max/min num_to_send values
 					int* array_to_send;
-					// figure out whether sending to higher or lower node
-					higherlower = ((myid^bit_flipper) > myid) ? true : false;
-					if (higherlower) {
-						pick_top_k_values(master_array, array_size, num_to_send_recv, 
-														&top_bottom_vals_return);
-					}
-					else {
-						pick_bottom_k_values(master_array, array_size,num_to_send_recv,
-														&top_bottom_vals_return);
-					}
+					// pop the last k values from the master array
+					pick_k_values(master_array, array_size,num_to_send_recv,
+												&vals_return);
 					// free this because we have a new master array
 					free(master_array);
-					master_array = top_bottom_vals_return.new_master_array;
-					array_size = top_bottom_vals_return.new_master_array_size;
-					array_to_send = top_bottom_vals_return.chosen_vals;
-					num_to_send = top_bottom_vals_return.chosen_vals_size;
+					master_array = vals_return.new_master_array;
+					array_size = vals_return.new_master_array_size;
+					array_to_send = vals_return.chosen_vals;
+					num_to_send = vals_return.chosen_vals_size;
 
 					// send array to neighbor
 					MPI_Send(array_to_send, num_to_send_recv, MPI_INT, myid^bit_flipper,
-						ii, MPI_COMM_WORLD);
+								i, MPI_COMM_WORLD);
 					// always make sure to free this array after sending it away
 					free(array_to_send);
 
@@ -225,7 +219,7 @@ barrier;
 				if (ne_actual_load > num_to_send_recv) {
 					temp_pointer = malloc(num_to_send_recv*sizeof(int));
 					MPI_Recv(temp_pointer, num_to_send_recv, MPI_INT, 
-						myid^bit_flipper, ii, MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
+							myid^bit_flipper, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
 
 					neighbor_lists[i] = temp_pointer;
 					neighbor_list_sizes[i] = num_to_send_recv;
@@ -234,9 +228,9 @@ barrier;
 				}
 			}
 		}
-/**********/
-barrier;
-/**********/
+	/**********/
+	barrier;
+	/**********/
 	}
 
 
@@ -362,7 +356,7 @@ barrier;
 
 */
 
-barrier;
+	barrier;
 
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
