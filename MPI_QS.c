@@ -4,7 +4,7 @@
 #include "helper_funcs.h"
 
 int main(int argc, char** argv) {
-	int MAX_ARRAY_SIZE = 800;
+	int MAX_ARRAY_SIZE = 80000;
 	int numprocs, myid;
 	int i, j; // used for loops
 	MPI_Init(&argc, &argv);
@@ -15,11 +15,12 @@ int main(int argc, char** argv) {
 	if (myid == 0){
 		master_array = initialize_list(MAX_ARRAY_SIZE);
 
-		printf("%d: \n", myid);
+		printf("non-load balancing version\n");
+		/*printf("%d: \n", myid);
 		for (i = 0; i < MAX_ARRAY_SIZE; i++) {
 			printf("%d ", master_array[i]);
 		}
-		printf("\n");
+		printf("\n");*/
 	}
 	else {
 		// needs to be declared for everyone because we will be 
@@ -84,7 +85,7 @@ int main(int argc, char** argv) {
 		}
 		else if ((idcheck_2 & (0xF8 >> k)) == idcheck_2) {
 			// probe to get length of incoming message
-			MPI_Probe(myid^((int)pow(2,lprocs - k - 1)), k, &receive_handle);
+			MPI_Probe(myid^((int)pow(2,lprocs - k - 1)), k, MPI_COMM_WORLD, &receive_handle);
 			// use receive handle to get size of incoming message
 			MPI_Get_count(&receive_handle, MPI_INT, &actual_receive);
 			// create a temp array to hold recvd data
@@ -120,6 +121,7 @@ int main(int argc, char** argv) {
 	// now check if all processors are sorted
 	//
 	//
+	/*
 	int receive_buf;
 	int send_buf = 1;
 	for (i = 0; i < numprocs; i++) {
@@ -148,7 +150,7 @@ int main(int argc, char** argv) {
 	}
 	
 	MPI_Barrier(MPI_COMM_WORLD);
-
+	*/
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
 	}

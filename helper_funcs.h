@@ -322,4 +322,65 @@ void pick_bottom_k_values(int* passed_list, int N, int k, struct PackedArrays* r
 	return_struct->new_master_array_size = master_iter;	
 }
 
+bool a_in_b(int a, int* b, int N) {
+	// check if int a is in int* list b of size N
+	int i;
+	for (i = 0; i < N; i++) {
+		if (b[i] == a) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void sorting_order(int ma_zero, int* sorting_order, int N, int* nls, int** nl) {
+	// look through master and sublists, return sorting order of length N 
+	// where the number in the array refers to the i value of the lists in order
+	// and i = -1 refers to the master array
+	
+	// create list to hold processors we have placed in sorting order list
+	int* proc_list_done = malloc(N*sizeof(int));
+	int proc_list_done_size = 0;
+
+	// go through sub lists and master list and find smallest
+	// when smallest is found, put that id in the sorting order list
+	// and take that id out of the proc list and into the proc list done list
+	int min_val;
+	int min_id;
+	int i, iter, k;
+	for (iter = 0; iter < N; iter++) {
+		min_val = INT_MAX;
+		if (a_in_b(-1, proc_list_done, proc_list_done_size) == 0) {
+			min_id = -1; // -1 refers to my own master list
+			min_val = ma_zero;
+		}
+		for (i = 0; i < (N-1); i++) {
+			if (nls[i] > 0) {
+				if (nl[i][0] < min_val) {
+					if (a_in_b(i, proc_list_done, proc_list_done_size) == 0) {
+						min_val = nl[i][0];
+						min_id = i;
+					}
+				}
+			}
+		}
+		sorting_order[iter] = min_id;
+		proc_list_done[proc_list_done_size] = min_id;
+		proc_list_done_size++;
+	}
+	free(proc_list_done);
+}
+
+
+void print_array(int* passed_list, int N, int myid) {
+	int i;
+	printf("myid: %d\n", myid);
+	for (i = 0; i < N; i++) {
+		printf("%d ", passed_list[i]);
+	}
+	printf("\n");
+}
+
+
+
 #endif
