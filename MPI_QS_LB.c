@@ -261,6 +261,7 @@ int main(int argc, char** argv) {
 
 	MPI_Status receive_handle_two;
 	int receive_amount;
+	int* temp_incoming_list;
 	for (i = 0; i < (lprocs*rounds); i++) {
 		printf("round %d\n", i);
 		ii = i % lprocs;
@@ -274,6 +275,7 @@ int main(int argc, char** argv) {
 				MPI_Send(neighbor_lists[i], neighbor_list_sizes[i], MPI_INT, 
 						myid ^ bit_flipper, i, MPI_COMM_WORLD);
 				free(neighbor_lists[i]);
+				neighbor_list_sizes[i] = 0;
 			}
 			else if (data_sent_to[i] == 1) {
 				// check to see the size of incoming list from neighbor
@@ -282,7 +284,7 @@ int main(int argc, char** argv) {
 							MPI_COMM_WORLD, &receive_handle_two);
 				MPI_Get_count(&receive_handle_two, MPI_INT, &receive_amount);
 				// size of incoming list stored in receive amount
-				int* temp_incoming_list = malloc(receive_amount*sizeof(int));
+				temp_incoming_list = malloc(receive_amount*sizeof(int));
 				MPI_Recv(temp_incoming_list, receive_amount, MPI_INT, 
 					myid^bit_flipper, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 				neighbor_lists[i] = temp_incoming_list;
@@ -312,6 +314,7 @@ int main(int argc, char** argv) {
 				MPI_Send(neighbor_lists[i], neighbor_list_sizes[i], MPI_INT, 
 						myid ^ bit_flipper, i, MPI_COMM_WORLD);
 				free(neighbor_lists[i]);
+				neighbor_list_sizes[i] = 0;
 			}
 		}
 	barrier;
