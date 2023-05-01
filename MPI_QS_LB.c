@@ -4,10 +4,10 @@
 #include "helper_funcs.h"
 
 #define barrier	  MPI_Barrier(MPI_COMM_WORLD)
-#define rounds    4
+#define rounds    2
 
 int main(int argc, char** argv) {
-	int MAX_ARRAY_SIZE = 80000;
+	int MAX_ARRAY_SIZE = 1000;
 	int numprocs, myid;
 	int i, j; // used for loops
 	MPI_Init(&argc, &argv);
@@ -185,7 +185,7 @@ barrier;
 
 		int num_to_send_recv = floor(abs(my_load - ne_load)/4.0);
 
-		if (num_to_send_recv > 100) {
+		if (num_to_send_recv > 5) {
 			
 			if (send_role == 1) {
 				// if sending node, find diff between my load and ne load
@@ -256,7 +256,70 @@ barrier;
 		t2 = MPI_Wtime();
 	}
 
-/*
+	barrier;
+
+	// now all arrays and subarrays should be sorted
+	// we need to send these back to their original owners
+	// we can do this by doing the same FOR loop as above, 
+	// and swapping with neighbors
+
+	MPI_Status receive_handle_two;
+	int receive_amount;
+	int* temp_incoming_list;
+	for (i = 0; i < (lprocs*rounds); i++) {
+		ii = i % lprocs;
+		bit_flipper = (int)pow(2, ii);
+
+		// every round everyone does a send and a receive
+		if (myid > (myid^bit_flipper)) {
+			if (data_recv_from[i] == 1) {
+				// do a blocking send first, then a blocking receive
+				MPI_Send(neighbor_lists[i], neighbor_list_sizes[i], MPI_INT, 
+						myid ^ bit_flipper, i, MPI_COMM_WORLD);
+				free(neighbor_lists[i]);
+				neighbor_list_sizes[i] = 0;
+			}
+			else if (data_sent_to[i] == 1) {
+				// check to see the size of incoming list from neighbor
+				MPI_Probe(myid^bit_flipper, i,
+							MPI_COMM_WORLD, &receive_handle_two);
+				MPI_Get_count(&receive_handle_two, MPI_INT, &receive_amount);
+				// size of incoming list stored in receive amount
+				temp_incoming_list = malloc(receive_amount*sizeof(int));
+				MPI_Recv(temp_incoming_list, receive_amount, MPI_INT, 
+					myid^bit_flipper, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+				neighbor_lists[i] = temp_incoming_list;
+				neighbor_list_sizes[i] = receive_amount;
+			}
+		}
+		else {
+			// do the same thing as above but in reverse order
+			if (data_sent_to[i] == 1) {
+				// check to see the size of incoming list from neighbor
+				MPI_Probe(myid^bit_flipper, i,
+							MPI_COMM_WORLD, &receive_handle_two);
+				MPI_Get_count(&receive_handle_two, MPI_INT, &receive_amount);
+				// size of incoming list stored in receive amount
+				temp_incoming_list = malloc(receive_amount*sizeof(int));
+				MPI_Recv(temp_incoming_list, receive_amount, MPI_INT, 
+					myid^bit_flipper, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+				neighbor_lists[i] = temp_incoming_list;
+				neighbor_list_sizes[i] = receive_amount;
+			}
+			else if (data_recv_from[i] == 1) {
+				MPI_Send(neighbor_lists[i], neighbor_list_sizes[i], MPI_INT, 
+						myid ^ bit_flipper, i, MPI_COMM_WORLD);
+				free(neighbor_lists[i]);
+				neighbor_list_sizes[i] = 0;
+			}
+		}
+barrier;
+	} 
+	
+	// after above message passing, every proc should have its own sent 
+	// data back in its own memory, replacing the data it had 
+	// from its neighbor processors
+
 	int receive_buf;
 	int	send_buf = 1;
 	for (i = 0; i < numprocs; i++) {
@@ -299,73 +362,14 @@ barrier;
 		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
 	}
-*/
-	// now all arrays and subarrays should be sorted
-	// we need to send these back to their original owners
-	// we can do this by doing the same FOR loop as above, 
-	// and swapping with neighbors
-
-/*
-	MPI_Status receive_handle_two;
-	int receive_amount;
-	for (i = 0; i < (lprocs*rounds); i++) {
-		ii = i % lprocs;
-		bit_flipper = (int)pow(2, ii);
-
-		// every round everyone does a send and a receive
-		if (myid > (myid^bit_flipper)) {
-			if (data_recv_from[i] == 1) {
-				// do a blocking send first, then a blocking receive
-				MPI_Send(neighbor_lists[i], neighbor_list_sizes[i], MPI_INT, 
-						myid ^ bit_flipper, i, MPI_COMM_WORLD);
-				free(neighbor_lists[i]);
-			}
-			else if (data_sent_to[i] == 1) {
-				// check to see the size of incoming list from neighbor
-				MPI_Probe(myid^bit_flipper, i,
-							MPI_COMM_WORLD, &receive_handle_two);
-				MPI_Get_count(&receive_handle_two, MPI_INT, &receive_amount);
-				// size of incoming list stored in receive amount
-				int* temp_incoming_list = malloc(receive_amount*sizeof(int));
-				MPI_Recv(temp_incoming_list, receive_amount, MPI_INT, 
-					myid^bit_flipper, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-				neighbor_lists[i] = temp_incoming_list;
-				neighbor_list_sizes[i] = receive_amount;
-			}
-		}
-		else {
-			// do the same thing as above but in reverse order
-			if (data_sent_to[i] == 1) {
-				// check to see the size of incoming list from neighbor
-				MPI_Probe(myid^bit_flipper, i,
-							MPI_COMM_WORLD, &receive_handle_two);
-				MPI_Get_count(&receive_handle_two, MPI_INT, &receive_amount);
-				// size of incoming list stored in receive amount
-				int* temp_incoming_list = malloc(receive_amount*sizeof(int));
-				MPI_Recv(temp_incoming_list, receive_amount, MPI_INT, 
-					myid^bit_flipper, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-				neighbor_lists[i] = temp_incoming_list;
-				neighbor_list_sizes[i] = receive_amount;
-			}
-			else if (data_recv_from[i] == 1) {
-				MPI_Send(neighbor_lists[i], neighbor_list_sizes[i], MPI_INT, 
-						myid ^ bit_flipper, i, MPI_COMM_WORLD);
-				free(neighbor_lists[i]);
-			}
-		}
-barrier;
-	} 
-	
-	// after above message passing, every proc should have its own sent 
-	// data back in its own memory, replacing the data it had 
-	// from its neighbor processors
-
-*/
 
 barrier;
 
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
 	}
+
+
+
 	return 0;
 }
