@@ -173,10 +173,10 @@ barrier;
 			MPI_Recv(&ne_actual_load, 1, MPI_INT, myid^bit_flipper, 102, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 			MPI_Ssend(&my_actual_load, 1, MPI_INT, myid^bit_flipper, 103, MPI_COMM_WORLD);
 		}
-		if (my_load >= 1.2*ne_load) {
+		if (my_load > ne_load) {
 			send_role = 1; // role is sender
 		}
-		else if (my_load < .8*ne_load) {
+		else if (my_load < ne_load) {
 			send_role = 0; // role is receiver
 		}
 		else {
