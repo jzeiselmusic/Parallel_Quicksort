@@ -403,5 +403,36 @@ void print_array(int* passed_list, int N, int myid) {
 }
 
 
+void merge_two_lists(int* master_list, int master_list_size, 
+		int* neighbor_list, int neighbor_list_size, 
+		int* new_master_list, int new_master_list_size) {
+
+	// new master list should be size master_list_size + NL size
+	int i, j;
+	int iter = 0;
+	int jiter = 0;
+	int element_one, element_two;
+	int smallest;
+	for (i = 0; i < new_master_list_size; i++) {
+		// find smallest in master list, neighbor list, 
+		// then increment pointer
+		if ((iter < master_list_size) && (jiter < neighbor_list_size)) {
+			element_one = master_list[iter];
+			element_two = neighbor_list[jiter];
+			// pick smallest then increment sublist pointers
+			smallest = element_one <= element_two ? element_one : element_two;
+			smallest == element_one ? (iter++) : (jiter++);
+			new_master_list[i] = smallest;
+		}
+		else if ((iter >= master_list_size) && (jiter < neighbor_list_size)) {
+			new_master_list[i] = neighbor_list[jiter++];
+		}
+		else if ((iter < master_list_size) && (jiter >= neighbor_list_size)) {
+			new_master_list[i] = master_list[iter++];
+		}
+	}
+}
+
+
 
 #endif

@@ -4,10 +4,11 @@
 #include "helper_funcs.h"
 
 #define barrier	  MPI_Barrier(MPI_COMM_WORLD)
-#define rounds    2
+#define rounds    4
+#define DIVISOR   8
 
 int main(int argc, char** argv) {
-	int MAX_ARRAY_SIZE = 2000;
+	int MAX_ARRAY_SIZE = 1000000;
 	int numprocs, myid;
 	int i, j; // used for loops
 	MPI_Init(&argc, &argv);
@@ -184,7 +185,7 @@ int main(int argc, char** argv) {
 			send_role = -1; // role is do nothing
 		}
 
-		int num_to_send_recv = (int)floor(abs(my_load - ne_load)/4.0);
+		int num_to_send_recv = (int)floor(abs(my_load - ne_load)/ DIVISOR );
 
 		if (num_to_send_recv > 0) {
 			
@@ -290,9 +291,6 @@ int main(int argc, char** argv) {
 				neighbor_lists[i] = temp_incoming_list;
 				neighbor_list_sizes[i] = receive_amount;
 			}
-			else {
-				printf("uh oh!\n");
-			}
 		}
 		else {
 			// do the same thing as above but in reverse order
@@ -319,24 +317,43 @@ int main(int argc, char** argv) {
 		}
 	barrier;
 	} 
-	
+	barrier;
+		// end the timer clock
+	if (myid == 0) {
+		t2 = MPI_Wtime();
+	}
 	// after above message passing, every proc should have its own sent 
 	// data back in its own memory, replacing the data it had 
 	// from its neighbor processors
+
+	// now we have to merge them all into the master list
+	// do this by merging each list one by one
+
+	int* final_temp_array;
+	int new_size;
+	for (i = 0; i < (rounds*lprocs); i++) {
+		if (neighbor_list_sizes > 0) {
+
+			new_size = array_size + neighbor_list_sizes[i];
+			final_temp_array = malloc(new_size*sizeof(int));
+
+			merge_two_lists(master_array, array_size, 
+				neighbor_lists[i], neighbor_list_sizes[i], 
+				final_temp_array, new_size);
+			
+			free(master_array);
+
+			master_array = final_temp_array;
+			array_size = new_size;
+		}
+	}
+
+/*
 	int receive_buf;
 	int	send_buf = 1;
 	for (i = 0; i < numprocs; i++) {
 	if (myid == i) {
 		printf("\nmyid: %d\n", myid);
-		printf("send/receive list: \n\t");
-		for (j = 0; j < (lprocs*rounds); j++) {
-			printf("%d ", data_sent_to[j]);
-		}
-		printf("\n\t");
-		for (j = 0; j < (lprocs*rounds); j++) {
-			printf("%d ", data_recv_from[j]);
-		}
-		printf("\n");
 		if (array_size > 0) {
 			printf("master array: \n");
 			for (j = 0; j < array_size; j++) {
@@ -346,20 +363,6 @@ int main(int argc, char** argv) {
 		}
 		else {
 			printf("none\n");
-		}
-		for (j = 0; j < (lprocs*rounds); j++) {
-			if (neighbor_list_sizes[j] > 0) {
-				printf("sublist%d: \n", j);
-				printf("\t");
-				for (k = 0; k < neighbor_list_sizes[j]; k++) {
-					printf("%d ", neighbor_lists[j][k]);
-				}
-				printf("\n");
-			}
-			else {
-				printf("sublist%d: \n", j);
-				printf("\tnone\n");
-			}
 		}
 		sleep(1);
 		if (myid < (numprocs-1)) {
@@ -375,12 +378,9 @@ int main(int argc, char** argv) {
 		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
 	}
+*/
 
-	// end the timer clock
-	if (myid == 0) {
-		t2 = MPI_Wtime();
-	}
-
+	barrier;
 
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);

@@ -21,7 +21,7 @@ int main2() {
 }
 
 
-int main() {
+int main10() {
 	int mylist[15] = {1, 5, 2, 2, 11, 50, 15, 3, 19, 18, 100, 100, 100, 30, 41};
 	struct PackedArrays p;
 	pick_k_values(mylist, 15, 4, &p);
@@ -75,6 +75,33 @@ int main4() {
 	int i;
 	for (i = 0; i < 5; i++ ) {
 		printf("%d ", sorted_ordering[i]);
+	}
+	printf("\n");
+	return 0;
+}
+
+int main() {
+	// test merge two lists
+	int* list_one = malloc(15*sizeof(int));
+	int* list_two = malloc(10*sizeof(int));
+
+	int i;
+	for (i = 0; i < 15; i++) {
+		list_one[i] = i*4;
+	}
+
+	for (i = 0; i < 10; i++) {
+		list_two[i] = i;
+	}
+
+	int* final_list = malloc(25*sizeof(int));
+
+	merge_two_lists(list_one, 15, 
+		list_two, 10, 
+		final_list, 25);
+
+	for (i = 0; i < 25; i++) {
+		printf("%d ", final_list[i]);
 	}
 	printf("\n");
 	return 0;
