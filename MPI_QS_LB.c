@@ -339,10 +339,8 @@ barrier;
 		if (neighbor_list_sizes[i] > 0) {
 			total_list[iter] = neighbor_lists[i];
 			total_list_sizes[iter] = neighbor_list_sizes[i];
-			//printf("id: %d neighbor %d size is %d\n", myid, i, neighbor_list_sizes[i]);
 			new_final_master_size += neighbor_list_sizes[i];
 			iter ++;
-			//printf("id: %d final size is now %d\n", myid, new_final_master_size);
 		}
 	}
 	if (array_size > 0) {
@@ -357,8 +355,6 @@ barrier;
 	if (full_size > 1) {
 		total_list = realloc(total_list, full_size*sizeof(int*));
 		total_list_sizes = realloc(total_list_sizes, full_size * sizeof(int));
-		//printf("myid: %d  size: %d  finalsize: %d\n", myid, full_size, new_final_master_size);
-		//printf("myid: %d  total_list0: %d  tls: %d\n", myid, total_list[0][0], total_list_sizes[0]);
 		concatenate_lists(total_list, total_list_sizes, full_size,
 					new_final_master, new_final_master_size);
 		
