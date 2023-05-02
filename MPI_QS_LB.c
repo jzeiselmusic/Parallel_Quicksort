@@ -1,10 +1,11 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include "helper_funcs.h"
 
 #define barrier	  MPI_Barrier(MPI_COMM_WORLD)
-#define rounds    2
+#define rounds    3
 
 int main(int argc, char** argv) {
 	int MAX_ARRAY_SIZE = 1000;
@@ -315,49 +316,9 @@ barrier;
 		}
 barrier;
 	} 
-	
-	barrier;
 
-	int receive_buf;
-	int	send_buf = 1;
-	for (i = 0; i < numprocs; i++) {
-	if (myid == i) {
-		printf("\nmyid: %d\n", myid);
-		if (array_size > 0) {
-			printf("master array: \n");
-			for (j = 0; j < array_size; j++) {
-				printf("%d ", master_array[j]);
-			}
-			printf("\n");
-		}
-		else {
-			printf("none\n");
-		}
-		for (j = 0; j < (rounds*lprocs); j++) {
-			printf("sublist %d\n", j);
-			if (neighbor_list_sizes[j] > 0) {
-				for (iter = 0; iter < neighbor_list_sizes[j]; iter++) {
-					printf("%d ", neighbor_lists[j][iter]);
-				}
-			}
-			else {
-				printf("none\n");
-			}
-		}
-		sleep(1);
-		if (myid < (numprocs-1)) {
-			MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
-		}
-		else {
-			break;
-		}
-		break;
-	}
-
-	else if (myid == (i+1)) {
-		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	}
-	}
+	free(data_sent_to);
+	free(data_recv_from);
 
 	barrier;
 	// after above message passing, every proc should have its own sent 
@@ -396,24 +357,31 @@ barrier;
 	if (full_size > 1) {
 		total_list = realloc(total_list, full_size*sizeof(int*));
 		total_list_sizes = realloc(total_list_sizes, full_size * sizeof(int));
-		printf("myid: %d  size: %d  finalsize: %d\n", myid, full_size, new_final_master_size);
-		printf("myid: %d  total_list0: %d  tls: %d\n", myid, total_list[0][0], total_list_sizes[0]);
+		//printf("myid: %d  size: %d  finalsize: %d\n", myid, full_size, new_final_master_size);
+		//printf("myid: %d  total_list0: %d  tls: %d\n", myid, total_list[0][0], total_list_sizes[0]);
 		concatenate_lists(total_list, total_list_sizes, full_size,
 					new_final_master, new_final_master_size);
+		
 	}
 	else if (full_size <= 1) {
 		memcpy(new_final_master, master_array, array_size*sizeof(int));
 		new_final_master_size = array_size;
 	}
 
-	free(master_array);
+	if (array_size == 0) {
+		free(master_array);
+	}
+	// this also frees master array if array_size>0
+	for (i = 0; i < full_size; i++) {
+		free(total_list[i]);
+	}
 	free(total_list);
 	free(total_list_sizes);
 
 
 barrier;
 
-	send_buf = 1;
+	/*send_buf = 1;
 	for (i = 0; i < numprocs; i++) {
 	if (myid == i) {
 		printf("\nmyid: %d\n", myid);
@@ -440,13 +408,13 @@ barrier;
 	else if (myid == (i+1)) {
 		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
-	}
+	}*/
 
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
 	}
 
-
-
+	free(new_final_master);
+	MPI_Finalize();
 	return 0;
 }
