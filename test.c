@@ -21,7 +21,7 @@ int main2() {
 }
 
 
-int main() {
+int main10() {
 	int test = 0xFFFF;
 	int flipper = test ^ (8 - 1);
 	int mylist[15] = {1, 5, 2, 2, 11, 50, 15, 3, 19, 18, 100, 100, 100, 30, 41};
@@ -79,5 +79,34 @@ int main4() {
 		printf("%d ", sorted_ordering[i]);
 	}
 	printf("\n");
+	return 0;
+}
+
+int main() {
+
+	//int list1[5] = {1,2,3,4,5};
+	int list2[6] = {10,11,12,13,14,15};
+	int list3[2] = {0,0};
+	//int list4[5] = {100,110,112,114,115};
+
+	int* full_list[2] = {list2, list3};//, list3, list4};
+	int full_list_sizes[2] = {6,2};
+	
+	int total_size = 8;
+
+	int* new_master = malloc(total_size*sizeof(int));
+
+	concatenate_lists(full_list, full_list_sizes, 2,
+					new_master, total_size);
+
+
+	int i;
+	for (i = 0; i < total_size; i++) {
+		printf("%d ", new_master[i]);
+	}
+	printf("\n");
+
+	free(new_master);
+
 	return 0;
 }

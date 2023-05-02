@@ -383,4 +383,39 @@ void print_array(int* passed_list, int N, int myid) {
 
 
 
+void concatenate_lists(int** lists, int* list_sizes, int t_num,
+					int* new_master, int total_size) {
+
+	// new master is an allocd array of size master_array plus all neighbor
+	// sizes. which should equal total size
+
+	// lists contains neighbor lists and master list
+	// t_num is total number of neighbor lists plus master list
+	// which is lprocs*rounds + 1
+
+	int i, j;
+	int min = INT_MAX;
+	int min_index;
+	int* done_list = calloc(t_num, sizeof(int));
+	int master_iter = 0;
+
+	for (j = 0; j < t_num; j++) {
+		min = INT_MAX;
+		for (i = 0; i < t_num; i++) {
+			if (done_list[i] != 1) {
+				min_index = lists[i][0] <= min ? i : min_index;
+				min = lists[i][0];
+			}
+		}
+		done_list[min_index] = 1;
+		for (i = 0; i < list_sizes[min_index]; i++) {
+			new_master[master_iter++] = lists[min_index][i];
+		}
+	}
+
+	free(done_list);
+}
+
+
+
 #endif
