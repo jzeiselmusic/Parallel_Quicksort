@@ -1,14 +1,15 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include "helper_funcs.h"
 
 #define barrier	  MPI_Barrier(MPI_COMM_WORLD)
-#define rounds    4
+#define rounds    3
 #define DIVISOR   8
 
 int main(int argc, char** argv) {
-	int MAX_ARRAY_SIZE = 1000000;
+	int MAX_ARRAY_SIZE;
 	int numprocs, myid;
 	int i, j; // used for loops
 	MPI_Init(&argc, &argv);
@@ -16,8 +17,20 @@ int main(int argc, char** argv) {
 	MPI_Comm_rank(MPI_COMM_WORLD, &myid);
 
 	int* master_array; // this is the array that starts in the master
+
+		if (argc != 3) {
+		return -1;
+	}
+
+	char* remaining;
+	char* input_val = argv[1];
+	MAX_ARRAY_SIZE = strtol(input_val, &remaining, 10);
+
+	input_val = argv[2];
+	int seed = strtol(input_val, &remaining, 10);
+
 	if (myid == 0){
-		master_array = initialize_list(MAX_ARRAY_SIZE);
+		master_array = initialize_list(MAX_ARRAY_SIZE, seed);
 
 		printf("load balancing version\n");
 	}
@@ -52,7 +65,7 @@ int main(int argc, char** argv) {
 		// senders are 0, then 0 and 1, then 0,1,2,3
 		if (idcheck == myid) {
 			// pick a pivot point for master array
-			pivot = pick_a_rand_pivot(master_array, array_size, 2);
+			pivot = pick_a_rand_pivot(master_array, array_size, 4, seed);
 			// dynamically allocate low list and high list
 			int* array_lo = malloc(array_size*sizeof(int));
 			int* array_hi = malloc(array_size*sizeof(int));
@@ -116,6 +129,27 @@ int main(int argc, char** argv) {
 	// at this point all processors should have their own 
 	// array of data in master_array of size array_size
 	//
+
+	// we now want to share the load imbalance info with all processors
+	int* initial_array_size = malloc(numprocs*sizeof(int));
+	MPI_Allgather(&array_size, 1, MPI_INT, initial_array_size, 
+					1, MPI_INT, MPI_COMM_WORLD);
+	// calculate initial load imbalance
+
+	// find standard deviation of the initial balance
+	// first find the mean
+	float sd = calculateSD(initial_array_size, numprocs);
+	float load_imbalance = sd / ((float)MAX_ARRAY_SIZE / numprocs);
+
+	if (myid == 0) {
+		printf("load balances: \n");
+		for (i = 0; i < numprocs; i++ ) {
+			printf("%d ", initial_array_size[i]);
+		}
+		printf("\n");
+		printf("load imbalance: %.3f\n", load_imbalance);
+	}
+
 	// we now want to do load balancing
 	// every processor first calculates its own load value.
 	// then exchanges it with its nearest neighbor by the first bit
@@ -159,8 +193,6 @@ int main(int argc, char** argv) {
 		for (iter = 0; iter < (lprocs*rounds); iter++) {
 			my_load += neighbor_list_sizes[iter];
 		}
-		printf("myid: %d  round: %d   myload:  %d   myactual:  %d\n",
-					myid, i, my_load, my_actual_load);
 		if (myid > (myid^bit_flipper)) {
 			// send first then receive
 			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 100, MPI_COMM_WORLD);
@@ -214,7 +246,6 @@ int main(int argc, char** argv) {
 				}
 			}
 			else if (send_role == 0) {
-				printf("myid: %d my partner: %d\n", myid, myid^bit_flipper);
 				// create a new list for values received from neighbor
 				// and then store that in a list of lists
 				if (ne_actual_load > num_to_send_recv) {
@@ -235,10 +266,6 @@ int main(int argc, char** argv) {
 	}
 
 	barrier;
-
-	if (myid == 0) {
-		printf("now doing sorting...\n");
-	}
 
 
 	// now every processor must sort its own master list and all of its sublists
@@ -264,7 +291,6 @@ int main(int argc, char** argv) {
 	int receive_amount;
 	int* temp_incoming_list;
 	for (i = 0; i < (lprocs*rounds); i++) {
-		printf("round %d\n", i);
 		ii = i % lprocs;
 		bit_flipper = (int)pow(2, ii);
 
@@ -272,7 +298,6 @@ int main(int argc, char** argv) {
 		if (myid > (myid^bit_flipper)) {
 			if (data_recv_from[i] == 1) {
 				// do a blocking send first, then a blocking receive
-				printf("myid: %d, trying to send to: %d, round %d\n", myid, myid^bit_flipper, i);
 				MPI_Send(neighbor_lists[i], neighbor_list_sizes[i], MPI_INT, 
 						myid ^ bit_flipper, i, MPI_COMM_WORLD);
 				free(neighbor_lists[i]);
@@ -280,7 +305,6 @@ int main(int argc, char** argv) {
 			}
 			else if (data_sent_to[i] == 1) {
 				// check to see the size of incoming list from neighbor
-				printf("myid: %d, trying to recv from: %d, round %d\n", myid, myid^bit_flipper, i);
 				MPI_Probe(myid^bit_flipper, i,
 							MPI_COMM_WORLD, &receive_handle_two);
 				MPI_Get_count(&receive_handle_two, MPI_INT, &receive_amount);
@@ -296,7 +320,6 @@ int main(int argc, char** argv) {
 			// do the same thing as above but in reverse order
 			if (data_sent_to[i] == 1) {
 				// check to see the size of incoming list from neighbor
-				printf("myid: %d, trying to recv from: %d, round %d\n", myid, myid^bit_flipper, i);
 				MPI_Probe(myid^bit_flipper, i,
 							MPI_COMM_WORLD, &receive_handle_two);
 				MPI_Get_count(&receive_handle_two, MPI_INT, &receive_amount);
@@ -308,7 +331,6 @@ int main(int argc, char** argv) {
 				neighbor_list_sizes[i] = receive_amount;
 			}
 			else if (data_recv_from[i] == 1) {
-				printf("myid: %d, trying to send to: %d, round %d\n", myid, myid^bit_flipper, i);
 				MPI_Send(neighbor_lists[i], neighbor_list_sizes[i], MPI_INT, 
 						myid ^ bit_flipper, i, MPI_COMM_WORLD);
 				free(neighbor_lists[i]);
@@ -348,42 +370,78 @@ int main(int argc, char** argv) {
 		}
 	}
 
-/*
+	MPI_File fh;
+	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/Sorted-LB.txt",
+					MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_ENV, &fh);
+
 	int receive_buf;
-	int	send_buf = 1;
+	int send_buf = 0;
+	char write_buf[256*4];
+
+	if (myid == 0) {
+		send_buf += sprintf(write_buf, 
+			"N = %d, P = %d, s = 0, load-imbalance-metric: %.3f\n", 
+			MAX_ARRAY_SIZE, numprocs, load_imbalance);
+		MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+	}
+
 	for (i = 0; i < numprocs; i++) {
-	if (myid == i) {
-		printf("\nmyid: %d\n", myid);
-		if (array_size > 0) {
-			printf("master array: \n");
-			for (j = 0; j < array_size; j++) {
-				printf("%d ", master_array[j]);
+		if (myid == i) {
+			send_buf += sprintf(write_buf, "Processor %d:\n", myid);
+			MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+			if (array_size > 0) {
+				for (j = 0; j < array_size; j++) {
+					if (j == array_size - 1) { 
+						send_buf += sprintf(write_buf, "%d", master_array[j]);
+					}
+					else { 
+						send_buf += sprintf(write_buf, "%d, ", master_array[j]);
+					}
+					MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+				}
+				send_buf += sprintf(write_buf, "\n");
+				MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
 			}
-			printf("\n");
-		}
-		else {
-			printf("none\n");
-		}
-		sleep(1);
-		if (myid < (numprocs-1)) {
-			MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
-		}
-		else {
+			else {
+				send_buf += sprintf(write_buf, "none\n");
+				MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+			}
+			sleep(1);
+			if (myid < (numprocs-1)) {
+				MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
+			}
+			else {
+				break;
+			}
 			break;
 		}
-		break;
-	}
 
-	else if (myid == (i+1)) {
-		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		else if (myid == (i+1)) {
+			MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			send_buf = receive_buf;
+		}
 	}
-	}
-*/
-
 	barrier;
+
+	MPI_File_close(&fh);
+
+	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/QS_LB_stats.txt",
+					MPI_MODE_CREATE|MPI_MODE_WRONLY|MPI_MODE_APPEND, MPI_INFO_ENV, &fh);
+
+	if (myid == 0) {
+		sprintf(write_buf, "-------------------\nN = %d, P = %d, s = 0, load-imbalance-metric: %.3f\n", 
+					MAX_ARRAY_SIZE, numprocs, load_imbalance);
+		MPI_File_write(fh, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "Parallel Time w/ LB = %.4f\n", t2 - t1);
+		MPI_File_write(fh, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+	}
+	MPI_File_close(&fh);
 
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
 	}
+
+	free(master_array);
+	MPI_Finalize();
 	return 0;
 }

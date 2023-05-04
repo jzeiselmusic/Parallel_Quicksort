@@ -12,7 +12,7 @@ cd $PBS_O_WORKDIR
 
 mpicc MPI_QS_LB.c -o ./build/mpi_qs_lb -lm
 
-mpirun ./build/mpi_qs_lb
+mpirun ./build/mpi_qs_lb 1000 2
 
 echo "Done"
 
