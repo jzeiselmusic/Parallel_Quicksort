@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
 	// find standard deviation of the initial balance
 	// first find the mean
 	float sd = calculateSD(initial_array_size, numprocs);
-	float load_imbalance = ((float)MAX_ARRAY_SIZE / numprocs) / sd;
+	float load_imbalance = sd / ((float)MAX_ARRAY_SIZE / numprocs);
 	//
 	// tests to make sure data is correct
 	barrier;
@@ -209,5 +209,9 @@ int main(int argc, char** argv) {
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
 	}
+
+
+	free(master_array);
+	MPI_Finalize();
 	return 0;
 }

@@ -6,6 +6,7 @@
 
 #define barrier	  MPI_Barrier(MPI_COMM_WORLD)
 #define rounds    3
+#define DIVISOR   8
 
 int main(int argc, char** argv) {
 	int MAX_ARRAY_SIZE;
@@ -137,7 +138,7 @@ barrier;
 	// find standard deviation of the initial balance
 	// first find the mean
 	float sd = calculateSD(initial_array_size, numprocs);
-	float load_imbalance = ((float)MAX_ARRAY_SIZE / numprocs) / sd;
+	float load_imbalance = sd / ((float)MAX_ARRAY_SIZE / numprocs);
 
 	if (myid == 0) {
 		printf("load balances: \n");
@@ -216,7 +217,7 @@ barrier;
 			send_role = -1; // role is do nothing
 		}
 
-		int num_to_send_recv = floor(abs(my_load - ne_load)/4.0);
+		int num_to_send_recv = floor(abs(my_load - ne_load) / DIVISOR);
 
 		if (num_to_send_recv > 5) {
 			
