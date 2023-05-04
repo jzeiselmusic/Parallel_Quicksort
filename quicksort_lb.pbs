@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -l walltime=00:00:20
+#PBS -l walltime=00:02:00
 #PBS -l nodes=8:ppn=1
 #PBS -N quicksort
 #PBS -q edu_shared
@@ -12,7 +12,11 @@ cd $PBS_O_WORKDIR
 
 mpicc MPI_QS_LB.c -o ./build/mpi_qs_lb -lm
 
-mpirun ./build/mpi_qs_lb
+mpicc MPI_QS.c -o ./build/mpi_qs -lm
+
+mpirun ./build/mpi_qs_lb 1000 2
+
+mpirun ./build/mpi_qs 1000 2
 
 echo "Done"
 

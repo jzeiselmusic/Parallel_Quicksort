@@ -17,15 +17,13 @@ struct PackedArrays {
 	int new_master_array_size;
 };
 
-
-
-int* initialize_list(int N) {
+int* initialize_list(int N, int seed) {
     // return pointer to a list of random vals length N
     int i;
     time_t t;
     int * num_list;
     num_list = malloc(N*sizeof(int));
-    srand((unsigned) time(&t));
+    srand((unsigned) seed);
     for (i = 0; i < N; i++) {
         num_list[i] = rand() % N;
     }
@@ -193,7 +191,7 @@ int pick_a_pivot(int* passed_list, int N) {
 	return vals[3];
 }
 
-int pick_a_rand_pivot(int* passed_list, int N, int numvals) {
+int pick_a_rand_pivot(int* passed_list, int N, int numvals, int seed) {
 	// another way of picking a pivot
 	// find numvals random points in list of length N, then find the median of those
 	int pivot;
@@ -201,7 +199,7 @@ int pick_a_rand_pivot(int* passed_list, int N, int numvals) {
 	int pivot_list[numvals];
 	int i;
 	if (numvals < N) {
-		srand((unsigned) time(&t));		
+		srand((unsigned) seed);		
 		for (i = 0; i < numvals; i++) {
 			pivot_list[i] = passed_list[(int)(rand() % N)];
 		}
@@ -414,6 +412,24 @@ void concatenate_lists(int** lists, int* list_sizes, int t_num,
 	}
 
 	free(done_list);
+}
+
+
+float calculateSD(int* data, int N) {
+    float sum = 0.0, mean, SD = 0.0;
+    int i;
+
+    for (i = 0; i < N; ++i) {
+        sum += (float)data[i];
+    }
+
+    mean = sum / N;
+
+    for (i = 0; i < N; ++i) {
+        SD += pow((float)data[i] - mean, 2);
+    }
+
+    return sqrt(SD / N);
 }
 
 

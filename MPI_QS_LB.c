@@ -8,16 +8,27 @@
 #define rounds    3
 
 int main(int argc, char** argv) {
-	int MAX_ARRAY_SIZE = 1000;
+	int MAX_ARRAY_SIZE;
 	int numprocs, myid;
 	int i, j; // used for loops
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &myid);
 
+	if (argc != 3) {
+		return -1;
+	}
+
+	char* remaining;
+	char* input_val = argv[1];
+	MAX_ARRAY_SIZE = strtol(input_val, &remaining, 10);
+
+	input_val = argv[2];
+	int seed = strtol(input_val, &remaining, 10);
+
 	int* master_array; // this is the array that starts in the master
 	if (myid == 0){
-		master_array = initialize_list(MAX_ARRAY_SIZE);
+		master_array = initialize_list(MAX_ARRAY_SIZE, seed);
 
 		printf("load balancing version\n");
 	}
@@ -52,7 +63,7 @@ int main(int argc, char** argv) {
 		// senders are 0, then 0 and 1, then 0,1,2,3
 		if (idcheck == myid) {
 			// pick a pivot point for master array
-			pivot = pick_a_rand_pivot(master_array, array_size, 2);
+			pivot = pick_a_rand_pivot(master_array, array_size, 4, seed);
 			// dynamically allocate low list and high list
 			int* array_lo = malloc(array_size*sizeof(int));
 			int* array_hi = malloc(array_size*sizeof(int));
@@ -116,7 +127,28 @@ barrier;
 /*************/
 	// at this point all processors should have their own 
 	// array of data in master_array of size array_size
-	//
+
+	// we now want to share the load imbalance info with all processors
+	int* initial_array_size = malloc(numprocs*sizeof(int));
+	MPI_Allgather(&array_size, 1, MPI_INT, initial_array_size, 
+					1, MPI_INT, MPI_COMM_WORLD);
+	// calculate initial load imbalance
+
+	// find standard deviation of the initial balance
+	// first find the mean
+	float sd = calculateSD(initial_array_size, numprocs);
+	float load_imbalance = ((float)MAX_ARRAY_SIZE / numprocs) / sd;
+
+	if (myid == 0) {
+		printf("load balances: \n");
+		for (i = 0; i < numprocs; i++ ) {
+			printf("%d ", initial_array_size[i]);
+		}
+		printf("\n");
+		printf("load imbalance: %.3f\n", load_imbalance);
+	}
+
+
 	// we now want to do load balancing
 	// every processor first calculates its own load value.
 	// then exchanges it with its nearest neighbor by the first bit
@@ -257,7 +289,7 @@ barrier;
 		t2 = MPI_Wtime();
 	}
 
-	barrier;
+barrier;
 
 	// now all arrays and subarrays should be sorted
 	// we need to send these back to their original owners
@@ -320,7 +352,7 @@ barrier;
 	free(data_sent_to);
 	free(data_recv_from);
 
-	barrier;
+barrier;
 	// after above message passing, every proc should have its own sent 
 	// data back in its own memory, replacing the data it had 
 	// from its neighbor processors
@@ -377,38 +409,76 @@ barrier;
 
 barrier;
 
-	/*send_buf = 1;
-	for (i = 0; i < numprocs; i++) {
-	if (myid == i) {
-		printf("\nmyid: %d\n", myid);
-		if (new_final_master_size > 0) {
-			printf("master array: \n");
-			for (j = 0; j < new_final_master_size; j++) {
-				printf("%d ", new_final_master[j]);
-			}
-			printf("\n");
-		}
-		else {
-			printf("none\n");
-		}
-		sleep(1);
-		if (myid < (numprocs-1)) {
-			MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
-		}
-		else {
-			break;
-		}
-		break;
+	MPI_File fh;
+	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/Sorted-LB.txt",
+					MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_ENV, &fh);
+
+	int receive_buf;
+	int send_buf = 0;
+	char write_buf[256*4];
+
+	if (myid == 0) {
+		send_buf += sprintf(write_buf, 
+			"N = %d, P = %d, s = 0, load-imbalance-metric: %.3f\n", 
+			MAX_ARRAY_SIZE, numprocs, load_imbalance);
+		MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
 	}
 
-	else if (myid == (i+1)) {
-		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	for (i = 0; i < numprocs; i++) {
+		if (myid == i) {
+			send_buf += sprintf(write_buf, "Processor %d:\n", myid);
+			MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+			if (new_final_master_size > 0) {
+				for (j = 0; j < new_final_master_size; j++) {
+					if (j == new_final_master_size - 1) { 
+						send_buf += sprintf(write_buf, "%d", new_final_master[j]);
+					}
+					else { 
+						send_buf += sprintf(write_buf, "%d, ", new_final_master[j]);
+					}
+					MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+				}
+				send_buf += sprintf(write_buf, "\n");
+				MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+			}
+			else {
+				send_buf += sprintf(write_buf, "none\n");
+				MPI_File_write_at(fh, send_buf - strlen(write_buf), write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+			}
+			sleep(1);
+			if (myid < (numprocs-1)) {
+				MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
+			}
+			else {
+				break;
+			}
+			break;
+		}
+
+		else if (myid == (i+1)) {
+			MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			send_buf = receive_buf;
+		}
 	}
-	}*/
+	barrier;
+
+	MPI_File_close(&fh);
 
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
 	}
+
+	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/QS_LB_stats.txt",
+					MPI_MODE_CREATE|MPI_MODE_WRONLY|MPI_MODE_APPEND, MPI_INFO_ENV, &fh);
+
+	if (myid == 0) {
+		sprintf(write_buf, "-------------------\nN = %d, P = %d, s = 0, load-imbalance-metric: %.3f\n", 
+					MAX_ARRAY_SIZE, numprocs, load_imbalance);
+		MPI_File_write(fh, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "Parallel Time w/ LB = %.4f\n", t2 - t1);
+		MPI_File_write(fh, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+	}
+	MPI_File_close(&fh);
 
 	free(new_final_master);
 	MPI_Finalize();
