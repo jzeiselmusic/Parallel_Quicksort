@@ -6,4 +6,5 @@ rm -f core.*
 rm -f .out*
 rm -f job_*
 rm -f e
+rm -f Sorted*
 echo "Done"

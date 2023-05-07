@@ -5,8 +5,10 @@
 #include "helper_funcs.h"
 
 #define barrier	  MPI_Barrier(MPI_COMM_WORLD)
-#define rounds    3
-#define DIVISOR   8
+#define rounds    4	 // rounds determines how many times to do log(P) load balancing
+					 // with nearest neighbors
+#define DIVISOR   8  // divisor determines how much data is sent per round
+					 // larger divisor, less data is sent
 
 int main(int argc, char** argv) {
 	int MAX_ARRAY_SIZE;
@@ -18,10 +20,7 @@ int main(int argc, char** argv) {
 
 	int* master_array; // this is the array that starts in the master
 
-		if (argc != 3) {
-		return -1;
-	}
-
+	// get command line arguments N and s (seed)
 	char* remaining;
 	char* input_val = argv[1];
 	MAX_ARRAY_SIZE = strtol(input_val, &remaining, 10);
@@ -30,9 +29,13 @@ int main(int argc, char** argv) {
 	int seed = strtol(input_val, &remaining, 10);
 
 	if (myid == 0){
-		master_array = initialize_list(MAX_ARRAY_SIZE, seed);
-
 		printf("load balancing version\n");
+		master_array = initialize_list(MAX_ARRAY_SIZE, seed);
+		/*printf("initial list: \n");
+		for (i = 0; i < MAX_ARRAY_SIZE; i++) {
+			printf("%d, ", master_array[i]);
+		}
+		printf("\n");*/
 	}
 	else {
 		// needs to be declared for everyone because we will be 
@@ -47,14 +50,23 @@ int main(int argc, char** argv) {
 	int lprocs = (int)log2(numprocs);
 	int hex_val = 0xFFFF ^ (numprocs - 1);
 
-	double t1, t2; // used for timing
+	double t1, t2, t3; // used for timing
 	MPI_Status receive_handle;
+
+	// these are used for the final file output
+	// and for debugging print buffers
+	MPI_File fh;
+	MPI_File fp;
+	char write_buf[256*4];
+	char file_name[256];
+	int receive_buf;
+	int send_buf;
 
 /*************/
 
 /*************/
 	
-	// start the timer clock
+	// start the timer
 	if (myid == 0) {
 		t1 = MPI_Wtime();
 	}
@@ -123,6 +135,40 @@ int main(int argc, char** argv) {
 	/**************/
 	}
 
+	/* the following commented code is for printing and debugging */
+
+	/*if (myid == 0) {
+		printf("initial distribution: \n");
+	}
+	send_buf = 1;
+	for (i = 0; i < numprocs; i++) {
+	if (myid == i) {
+		printf("\nmyid: %d\n", myid);
+		if (array_size > 0) {
+			printf("master array: \n");
+			for (j = 0; j < array_size; j++) {
+				printf("%d ", master_array[j]);
+			}
+			printf("\n");
+		}
+		else {
+			printf("none\n");
+		}
+		sleep(1);
+		if (myid < (numprocs-1)) {
+			MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
+		}
+		else {
+			break;
+		}
+		break;
+	}
+
+	else if (myid == (i+1)) {
+		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+	}*/
+
 /*************/
 
 /*************/
@@ -130,7 +176,7 @@ int main(int argc, char** argv) {
 	// array of data in master_array of size array_size
 	//
 
-	// we now want to share the load imbalance info with all processors
+	// we now want to share the initial load imbalance info with all processors
 	int* initial_array_size = malloc(numprocs*sizeof(int));
 	MPI_Allgather(&array_size, 1, MPI_INT, initial_array_size, 
 					1, MPI_INT, MPI_COMM_WORLD);
@@ -150,6 +196,12 @@ int main(int argc, char** argv) {
 		printf("load imbalance: %.3f\n", load_imbalance);
 	}
 
+	// start the timer clock t3
+	// this is for timing no-pivoting
+	if (myid == 0) {
+		t3 = MPI_Wtime();
+	}
+
 	// we now want to do load balancing
 	// every processor first calculates its own load value.
 	// then exchanges it with its nearest neighbor by the first bit
@@ -158,13 +210,12 @@ int main(int argc, char** argv) {
 	int bit_flipper;
 	int my_load, my_actual_load;
 	int ne_load, ne_actual_load;
-	int num_to_send;
-	int num_to_receive;
+	int num_to_send_recv; // amount of data being passed for load balancing. same for sender and receiver
 	bool higherlower; // true if sending to higher, false for sending to lower
 
 	int send_role;
 
-	// struct to help with picking top/bottom values and changing master array
+	// struct to help with picking values to send and changing master array
 	struct PackedArrays vals_return;
 
 	// need to store a list [] of pointers that hold first mem location of neighboring data lists
@@ -176,23 +227,25 @@ int main(int argc, char** argv) {
 	int* data_sent_to = calloc(lprocs*rounds, sizeof(int));  // will be 0 if not, 1 if yes
 	int* data_recv_from = calloc(lprocs*rounds, sizeof(int)); // will be 0 if not, 1 if yes
 
-	int* temp_pointer;
+	int* temp_pointer; // for receiving data
 
 	int iter; // used for printing / debugging
 	int ii; // ii is the value that represents i % lprocs because we are doing 3 rounds 
 			// so in this case ii will go from 0 to 2 and i will go from 0 to 8
 
-	MPI_Request request;
-
 	for (i = 0; i < (lprocs*rounds); i++) {
-		ii = i % lprocs;
+		ii = i % lprocs; // ii represents which nearest neighbor to send to. 0,1,2,0,1,2,0,1,2 etc.
 		bit_flipper = (int)pow(2, ii);
 		my_actual_load = array_size; // for now, we will say the load 
-									 // is just size of my array
+									 // is just size of my array. can do a more in depth
+									 // calculation of load later
+
+		// calculate how loaded I am
 		my_load = my_actual_load;
 		for (iter = 0; iter < (lprocs*rounds); iter++) {
 			my_load += neighbor_list_sizes[iter];
 		}
+		// do Load Information Exchange
 		if (myid > (myid^bit_flipper)) {
 			// send first then receive
 			MPI_Ssend(&my_load, 1, MPI_INT, myid^bit_flipper, 100, MPI_COMM_WORLD);
@@ -217,7 +270,7 @@ int main(int argc, char** argv) {
 			send_role = -1; // role is do nothing
 		}
 
-		int num_to_send_recv = (int)floor(abs(my_load - ne_load)/ DIVISOR );
+		num_to_send_recv = (int)floor(abs(my_load - ne_load)/ DIVISOR );
 
 		if (num_to_send_recv > 0) {
 			
@@ -234,14 +287,13 @@ int main(int argc, char** argv) {
 					master_array = vals_return.new_master_array;
 					array_size = vals_return.new_master_array_size;
 					array_to_send = vals_return.chosen_vals;
-					num_to_send = vals_return.chosen_vals_size;
 
 					// send array to neighbor
 					MPI_Ssend(array_to_send, num_to_send_recv, MPI_INT, myid^bit_flipper,
 								i, MPI_COMM_WORLD);
 					// always make sure to free this array after sending it away
 					free(array_to_send);
-
+					// log that the ith processor was sent to
 					data_sent_to[i] = 1;
 				}
 			}
@@ -252,10 +304,11 @@ int main(int argc, char** argv) {
 					temp_pointer = malloc(num_to_send_recv*sizeof(int));
 					MPI_Recv(temp_pointer, num_to_send_recv, MPI_INT, 
 							myid^bit_flipper, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
-
+					// keep track of received data in neighbor lists
 					neighbor_lists[i] = temp_pointer;
+					// keep track of size of received data in neighbor list sizes
 					neighbor_list_sizes[i] = num_to_send_recv;
-
+					// log that the ith processor was received from
 					data_recv_from[i] = 1;
 				}
 			}
@@ -267,6 +320,57 @@ int main(int argc, char** argv) {
 
 	barrier;
 
+	/* the following commented code is for printing and debugging */
+
+	/*if (myid == 0) {
+		printf("after balancing: \n");
+	}
+	send_buf = 1;
+	for (i = 0; i < numprocs; i++) {
+	if (myid == i) {
+		printf("\nmyid: %d\n", myid);
+		if (array_size > 0) {
+			printf("master array: \n");
+			for (j = 0; j < array_size; j++) {
+				printf("%d ", master_array[j]);
+			}
+			printf("\n");
+		}
+		else {
+			printf("none\n");
+		}
+		for (j = 0; j < (rounds*lprocs); j++) {
+			printf("sublist %d\n", j);
+			if (neighbor_list_sizes[j] > 0) {
+				for (iter = 0; iter < neighbor_list_sizes[j]; iter++) {
+					printf("%d ", neighbor_lists[j][iter]);
+				}
+				printf("\n");
+			}
+			else {
+				printf("none\n");
+			}
+		}
+		sleep(1);
+		if (myid < (numprocs-1)) {
+			MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
+		}
+		else {
+			break;
+		}
+		break;
+	}
+
+	else if (myid == (i+1)) {
+		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+	}*/
+
+
+/****************/
+
+
+/****************/
 
 	// now every processor must sort its own master list and all of its sublists
 	// if it has any sublists
@@ -279,17 +383,67 @@ int main(int argc, char** argv) {
 		}
 	}
 
+	barrier;
+
+	/* the following commented code is for printing and debugging */
+
+	/*if (myid == 0) {
+		printf("after sorting: \n");
+	}
+	send_buf = 1;
+	for (i = 0; i < numprocs; i++) {
+	if (myid == i) {
+		printf("\nmyid: %d\n", myid);
+		if (array_size > 0) {
+			printf("master array: \n");
+			for (j = 0; j < array_size; j++) {
+				printf("%d ", master_array[j]);
+			}
+			printf("\n");
+		}
+		else {
+			printf("none\n");
+		}
+		for (j = 0; j < (rounds*lprocs); j++) {
+			printf("sublist %d\n", j);
+			if (neighbor_list_sizes[j] > 0) {
+				for (iter = 0; iter < neighbor_list_sizes[j]; iter++) {
+					printf("%d ", neighbor_lists[j][iter]);
+				}
+				printf("\n");
+			}
+			else {
+				printf("none\n");
+			}
+		}
+		sleep(1);
+		if (myid < (numprocs-1)) {
+			MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
+		}
+		else {
+			break;
+		}
+		break;
+	}
+
+	else if (myid == (i+1)) {
+		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+	}*/
+
 	// now all arrays and subarrays should be sorted
 	// we need to send these back to their original owners
 	// we can do this by doing the same FOR loop as above, 
 	// and swapping with neighbors
 
-	barrier;
-
 
 	MPI_Status receive_handle_two;
 	int receive_amount;
 	int* temp_incoming_list;
+
+	// go through all sublists again, this time sending
+	// data back when it was previously received,
+	// or receiving if it was previously sent.
 	for (i = 0; i < (lprocs*rounds); i++) {
 		ii = i % lprocs;
 		bit_flipper = (int)pow(2, ii);
@@ -339,14 +493,59 @@ int main(int argc, char** argv) {
 		}
 	barrier;
 	} 
-	barrier;
-		// end the timer clock
-	if (myid == 0) {
-		t2 = MPI_Wtime();
-	}
+
 	// after above message passing, every proc should have its own sent 
 	// data back in its own memory, replacing the data it had 
 	// from its neighbor processors
+
+	/* the following commented code is for printing and debugging */
+
+	/*if (myid == 0) {
+		printf("after sending back: \n");
+	}
+	send_buf = 1;
+	for (i = 0; i < numprocs; i++) {
+	if (myid == i) {
+		printf("\nmyid: %d\n", myid);
+		if (array_size > 0) {
+			printf("master array: \n");
+			for (j = 0; j < array_size; j++) {
+				printf("%d ", master_array[j]);
+			}
+			printf("\n");
+		}
+		else {
+			printf("none\n");
+		}
+		for (j = 0; j < (rounds*lprocs); j++) {
+			printf("sublist %d\n", j);
+			if (neighbor_list_sizes[j] > 0) {
+				for (iter = 0; iter < neighbor_list_sizes[j]; iter++) {
+					printf("%d ", neighbor_lists[j][iter]);
+				}
+				printf("\n");
+			}
+			else {
+				printf("none\n");
+			}
+		}
+		sleep(1);
+		if (myid < (numprocs-1)) {
+			MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
+		}
+		else {
+			break;
+		}
+		break;
+	}
+
+	else if (myid == (i+1)) {
+		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+	}*/
+
+
+	barrier;
 
 	// now we have to merge them all into the master list
 	// do this by merging each list one by one
@@ -355,14 +554,15 @@ int main(int argc, char** argv) {
 	int new_size;
 	for (i = 0; i < (rounds*lprocs); i++) {
 		if (neighbor_list_sizes > 0) {
-
+		// only merge if there is data to merge
 			new_size = array_size + neighbor_list_sizes[i];
+			// allocate space
 			final_temp_array = malloc(new_size*sizeof(int));
 
 			merge_two_lists(master_array, array_size, 
 				neighbor_lists[i], neighbor_list_sizes[i], 
 				final_temp_array, new_size);
-			
+			// get rid of past master array. we have new master array
 			free(master_array);
 
 			master_array = final_temp_array;
@@ -370,13 +570,66 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	MPI_File fh;
-	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/Sorted-LB.txt",
-					MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_ENV, &fh);
+	/* the following commented code is for printing and debugging */
 
-	int receive_buf;
-	int send_buf = 0;
-	char write_buf[256*4];
+	/*if (myid == 0) {
+		printf("after merging into master: \n");
+	}
+	send_buf = 1;
+	for (i = 0; i < numprocs; i++) {
+	if (myid == i) {
+		printf("\nmyid: %d\n", myid);
+		if (array_size > 0) {
+			printf("master array: \n");
+			for (j = 0; j < array_size; j++) {
+				printf("%d ", master_array[j]);
+			}
+			printf("\n");
+		}
+		else {
+			printf("none\n");
+		}
+		for (j = 0; j < (rounds*lprocs); j++) {
+			printf("sublist %d\n", j);
+			if (neighbor_list_sizes[j] > 0) {
+				for (iter = 0; iter < neighbor_list_sizes[j]; iter++) {
+					printf("%d ", neighbor_lists[j][iter]);
+				}
+				printf("\n");
+			}
+			else {
+				printf("none\n");
+			}
+		}
+		sleep(1);
+		if (myid < (numprocs-1)) {
+			MPI_Ssend(&send_buf, 1, MPI_INT, myid+1, 0, MPI_COMM_WORLD);
+		}
+		else {
+			break;
+		}
+		break;
+	}
+
+	else if (myid == (i+1)) {
+		MPI_Recv(&receive_buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+	}*/
+
+
+	// end the timer clock
+	if (myid == 0) {
+		t2 = MPI_Wtime();
+	}
+
+
+	// now we print everything out to a file Sorted-LB
+	// via token passing
+
+	send_buf = 1;
+	sprintf(file_name, "/home/jzeise2/Parallel_Quicksort/Sorted-LB_%d_%d.txt", MAX_ARRAY_SIZE, numprocs);
+	MPI_File_open(MPI_COMM_WORLD, file_name,
+					MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_ENV, &fh);
 
 	if (myid == 0) {
 		send_buf += sprintf(write_buf, 
@@ -423,23 +676,29 @@ int main(int argc, char** argv) {
 	}
 	barrier;
 
-	MPI_File_close(&fh);
+	MPI_File_close(&fh); 
 
-	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/QS_LB_stats.txt",
-					MPI_MODE_CREATE|MPI_MODE_WRONLY|MPI_MODE_APPEND, MPI_INFO_ENV, &fh);
+	// this is for the stats file
+
+	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/QS_LB_stats.txt", MPI_MODE_CREATE|MPI_MODE_WRONLY|MPI_MODE_APPEND, MPI_INFO_ENV, &fp);
 
 	if (myid == 0) {
 		sprintf(write_buf, "-------------------\nN = %d, P = %d, s = 0, load-imbalance-metric: %.3f\n", 
 					MAX_ARRAY_SIZE, numprocs, load_imbalance);
-		MPI_File_write(fh, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
-		sprintf(write_buf, "Parallel Time w/ LB = %.4f\n", t2 - t1);
-		MPI_File_write(fh, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		MPI_File_write(fp, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "Parallel Time w/ LB w/ pivoting = %.4f\n", t2 - t1);
+		MPI_File_write(fp, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "Parallel Time w/ LB w/o pivoting = %.4f\n", t2 - t3);
+		MPI_File_write(fp, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "-------------------\n");
+		MPI_File_write(fp, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
 	}
-	MPI_File_close(&fh);
+	MPI_File_close(&fp);
 
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
 	}
+
 
 	free(master_array);
 	MPI_Finalize();

@@ -16,10 +16,6 @@ int main(int argc, char** argv) {
 
 	int* master_array; // this is the array that starts in the master
 
-		if (argc != 3) {
-		return -1;
-	}
-
 	char* remaining;
 	char* input_val = argv[1];
 	MAX_ARRAY_SIZE = strtol(input_val, &remaining, 10);
@@ -45,11 +41,17 @@ int main(int argc, char** argv) {
 	int array_lo_iter, array_hi_iter;
 	int lprocs = (int)log2(numprocs);
 
-	double t1, t2;
+	double t1, t2, t3;
 	MPI_Status receive_handle;
 
-	barrier;
-	
+	// these are for output writing and debugging
+	MPI_File fh;
+	char write_buf[256*4];
+	char file_name[256];
+	int receive_buf;
+	int send_buf;
+
+
 	// logp rounds
 	if (myid == 0) {
 		t1 = MPI_Wtime();
@@ -134,6 +136,11 @@ int main(int argc, char** argv) {
 		printf("load imbalance: %.3f\n", load_imbalance);
 	}
 
+	// start the timer clock t3
+	if (myid == 0) {
+		t3 = MPI_Wtime();
+	}
+
 	// at this point all processors should have their own array of data in master_array of size array_size
 	//
 	barrier;
@@ -148,13 +155,13 @@ int main(int argc, char** argv) {
 		t2 = MPI_Wtime();
 	}
 	
-	MPI_File fh;
-	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/Sorted-No-LB.txt",
+	
+	// now we do writing output to files
+	send_buf = 0;
+	sprintf(file_name, "/home/jzeise2/Parallel_Quicksort/Sorted-No-LB_%d_%d.txt", MAX_ARRAY_SIZE, numprocs);
+	MPI_File_open(MPI_COMM_WORLD, file_name,
 					MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_ENV, &fh);
 
-	int receive_buf;
-	int send_buf = 0;
-	char write_buf[256*4];
 
 	if (myid == 0) {
 		send_buf += sprintf(write_buf, 
@@ -202,17 +209,24 @@ int main(int argc, char** argv) {
 	barrier;
 
 	MPI_File_close(&fh);
+	
+	MPI_File fp;
 
-	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/QS_LB_stats.txt",
-					MPI_MODE_CREATE|MPI_MODE_WRONLY|MPI_MODE_APPEND, MPI_INFO_ENV, &fh);
+	MPI_File_open(MPI_COMM_WORLD, "/home/jzeise2/Parallel_Quicksort/QS_LB_stats.txt",MPI_MODE_CREATE|MPI_MODE_WRONLY|MPI_MODE_APPEND, MPI_INFO_ENV, &fp);
 
 	if (myid == 0) {
-		sprintf(write_buf, "Parallel Time w/o LB = %.4f\n", t2 - t1);
-		MPI_File_write(fh, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "-------------------\nN = %d, P = %d, s = 0, load-imbalance-metric: %.3f\n", MAX_ARRAY_SIZE, numprocs, load_imbalance);
+		MPI_File_write(fp, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "Parallel Time w/o LB w/ pivoting = %.4f\n", t2 - t1);
+		MPI_File_write(fp, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "Parallel Time w/o LB w/o pivoting = %.4f\n", t2 - t3);
+		MPI_File_write(fp, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
+		sprintf(write_buf, "-------------------\n");
+		MPI_File_write(fp, write_buf, strlen(write_buf), MPI_CHAR, MPI_STATUS_IGNORE);
 	}
-	MPI_File_close(&fh);
+	MPI_File_close(&fp);
 
-
+	
 	if (myid == 0) {
 		printf("\n\ntotal time: %.4f\n", t2 - t1);
 	}
